@@ -11,8 +11,32 @@ export interface Mensaje {
 }
 
 // Llamada rápida sin system prompt — solo para extracción/OCR de imagen
+// Usa solo modelos con soporte de visión (Gemini → Groq vision → Anthropic). Nunca Groq texto.
 export async function llamarRapido(messages: Mensaje[], maxTokens = 300): Promise<string> {
-  return llamarModelo("Eres un asistente que extrae texto de imágenes. Responde solo con el texto extraído.", messages, maxTokens)
+  const system = "Eres un asistente que extrae texto de imágenes. Responde solo con el texto extraído, sin comentarios adicionales."
+  const geminiKey = process.env.GEMINI_API_KEY
+  const groqKey = process.env.GROQ_API_KEY
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+
+  if (geminiKey) {
+    try {
+      return await conReintentos(() => llamarGemini(geminiKey, system, messages, maxTokens))
+    } catch (err) {
+      console.warn("[IA Vision] Gemini no disponible:", String(err).slice(0, 80))
+    }
+  }
+  // Groq con modelo vision (llama-4-scout soporta imágenes)
+  if (groqKey) {
+    try {
+      return await conReintentos(() => llamarGroq(groqKey, system, messages, maxTokens, "meta-llama/llama-4-scout-17b-16e-instruct"))
+    } catch (err) {
+      console.warn("[IA Vision] Groq vision no disponible:", String(err).slice(0, 80))
+    }
+  }
+  if (anthropicKey) {
+    return await conReintentos(() => llamarAnthropic(anthropicKey, system, messages, maxTokens))
+  }
+  throw new Error("Sin proveedor con soporte de visión disponible")
 }
 
 // Errores que vale la pena reintentar (servidor caído, timeout, rate limit)
@@ -127,8 +151,8 @@ function convertirOpenAI(messages: Mensaje[]) {
   })
 }
 
-async function llamarGroq(apiKey: string, system: string, messages: Mensaje[], maxTokens: number) {
-  const modelo = process.env.MODELO || "llama-3.3-70b-versatile"
+async function llamarGroq(apiKey: string, system: string, messages: Mensaje[], maxTokens: number, modeloOverride?: string) {
+  const modelo = modeloOverride || process.env.MODELO || "llama-3.3-70b-versatile"
   const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },

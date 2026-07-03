@@ -73,6 +73,16 @@ export async function POST(req: NextRequest) {
 
       fotosHoy = fotosHoy + 1;
 
+      // Si la transcripción volvió vacía, avisar al usuario en lugar de confundir al tutor
+      if (!ejercicioExtraido?.trim()) {
+        return NextResponse.json({
+          respuesta: "No pude leer bien la foto 📷. ¿Puedes escribir el ejercicio con texto? Así te ayudo igual de bien. ✍️",
+          ejercicioExtraido: null,
+          fotosHoy,
+          fotasRestantes: Math.max(0, LIMITE_FOTOS_DIA - fotosHoy),
+        });
+      }
+
       if (historia.length > 0) {
         const ultimo = historia[historia.length - 1];
         const textoOriginal = typeof ultimo.content === "string" ? ultimo.content.trim() : "";
